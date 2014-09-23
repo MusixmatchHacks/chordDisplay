@@ -79,6 +79,7 @@ padding-top: 5px;">About the project</a>
 				<!-- Your browser does not support the audio element. -->
 			</audio>
 		</div>
+		<div id = 'lyricsDisplay'></div>
 </body>
 <!-- <svg class="chart"></svg> -->
 <!-- <script src="http://jpillora.com/xdomain/dist/0.6/xdomain.min.js" master="localhost:8888"></script> -->
@@ -323,6 +324,14 @@ function getSpotifyIdFromMbidEchonest(mbId)
 	})
 }
 
+function countOccurences(a,i){ //count occurences of elements in array
+ var result = 0;
+ for(var o in a)
+  if(a[o] == i)
+   result++;
+ return result;
+}
+
 function getMxmAndSpotifyIdFromEchonest(response)
 {
 	//console.log(response.message.body.track)
@@ -381,10 +390,86 @@ function getTrackId(response)
 		}	
 	})
 }			
+var myVar = null;
+function myTimer(subtitles,chords) {
+    // var d = new Date();
+    // var t = d.toLocaleTimeString();
+    // console.log(chords)
+    aplayer = document.getElementById("aplayer")  
+
+	if (aplayer.currentTime > 0 && !aplayer.paused) //Player is on
+	{
+		// line1 = ''
+		// line2 = ''
+		// console.log(chords['key'])
+		indx = 0
+		tm = aplayer.currentTime
+		frm = Math.round((tm*44100)/4096) - 1
+		console.log(frm)
+		currChord = chords[frm] 
+		// console.log(tm)
+		diffPrev = Number.MAX_VALUE
+		diffNow = 0
+		for (var i = 0; i < subtitles.subtitles.subtitle_body.length; i++) 
+		{
+				diffNow = tm - subtitles.subtitles.subtitle_body[i]['time']['total']
+				if (diffNow>0 && diffNow < diffPrev)
+				{
+					diffPrev = diffNow
+					indx = i
+					// console.log(diffNow)
+					// console.log(diffPrev)
+					// console.log('')
+
+				} 
+		}
+		
+		if (indx!= 0)
+		{
+			currentLineId = 'line' + indx
+			line1 = subtitles.subtitles.subtitle_body[indx]['text']
+			document.getElementById(currentLineId).innerHTML = '<p> </p> <p> <b>  <font size = "6">'+line1+'      '+currChord+'</font></b></p> <p> </p>' //+ '<p>'+line2+'</p>';
+
+			previousLineId = 'line' + (indx-1)
+			line0 = subtitles.subtitles.subtitle_body[indx-1]['text']
+			document.getElementById(previousLineId).innerHTML = '<p>'+line0+'</p>' //+ '<p>'+line2+'</p>';
+ 
+		}
+		else
+		{
+			currentLineId = 'line' + indx
+			line1 = subtitles.subtitles.subtitle_body[indx]['text']
+			document.getElementById(currentLineId).innerHTML = '<p> <b> <font size = "6">'+line1+'</font></b></p> <p> </p>' //+ '<p>'+line2+'</p>'; 
+
+		}
+		// line1 = subtitles.subtitles.subtitle_body[indx]['text']
+		// if(indx+1 >= subtitles.subtitles.subtitle_body.length)
+		// {
+		// 	line2 = ''
+		// }
+		// else
+		// {
+		// 	line2 = subtitles.subtitles.subtitle_body[indx+1]['text']
+		// } 	
+		// document.getElementById("lyricsDisplay").innerHTML = '<p>'+line1+'</p>' + '<p>'+line2+'</p>';
+	}
+	else
+	{
+		// document.getElementById("lyricsDisplay").innerHTML = '<p>'+''+'</p>';	
+	}
+    // console.log(document.getElementById("aplayer").controller)
+    
+}
+
+function myStopFunction() {
+	document.getElementById("lyricsDisplay").innerHTML = '<p> </p>';
+    clearInterval(myVar);
+}
 
 function getChordsAndLyrics () 
 {
 	words = searchQuery.value//.split(" ")
+	chordDict = ['A','A#','B','C','C#','D','D#','E','F','F#','G','G#','Am','A#m','Bm','Cm','C#m','Dm','D#m','Em','Fm','F#m','Gm','G#m']
 
 	// http://ec2-54-165-48-238.compute-1.amazonaws.com:8080/ws/1.1/macro.subtitles.get?app_id=musixmatch-rd-v1.0&usertoken=74b62c7030d940b2c0e9d3cc97a42f4bc531e9501479cd9e&q_track=radiohead%20creep&f_has_lyrics=1
 	var seed_query = mxmAPI_base_new + '&q_track=' + searchQuery.value + '&f_has_lyrics=1'
@@ -427,9 +512,10 @@ function getChordsAndLyrics ()
 		 	url = encodeURI(url)
 		 	$("#status").text("Audio processing")
 		 	console.log(url)
-		 	return getJSON(url).then(function(chords){
+		 	return getJSON(url).then(function(chordObj){
 		 		$("#status").text("Done")
-		 		console.log(chords)
+		 		console.log(chordObj)
+		 		chords = chordObj['chords']
 		 		document.getElementById("progress").style.display = "none"
 		 		document.getElementById("metadata").style.display = "inline"
 		 		audioSrc = chordAPIUrl + '/' + track_ids[0] + '/' + track_ids[0] //+ '.mp3'
@@ -448,6 +534,83 @@ function getChordsAndLyrics ()
 		 		source.src= audioSrc + '.wav';
 		 		document.getElementById("aplayer").appendChild(source);
 
+		 		beatSyncLyrics = audioSrc + '_beatSynced.json'
+		 		getJSON(encodeURI(beatSyncLyrics)).then(function(subtitles)
+		 		{
+		 			console.log(subtitles.subtitles)
+
+		 			lyricsContainer = document.getElementById("lyricsDisplay")
+		 			singTimes = new Array()
+
+		 			for (var i = 0; i < subtitles.subtitles.subtitle_body.length; i++) 
+		 			{
+		 				lyricsContainer.innerHTML = lyricsContainer.innerHTML + '<p id = ' + 'line' + i + '>' + subtitles.subtitles.subtitle_body[i]['text'] + '</p>'
+		 				singTimes.push(subtitles.subtitles.subtitle_body[i]['time']['total'])
+		 			}
+
+		 			chordLines = new Array()
+		 			// console.log(chords.toString())
+		 			
+		 			// chords = chords.toString()
+		 			//console.log(chords.substring(2,10))
+		 			// chords = chords.replace(/,/g,"")//replace(/,/ ,"")
+		 			// console.log(chords)
+		 			// console.log(singTimes)
+		 			console.log(chords.length)
+		 			// for (var i = 0; i < singTimes.length -1; i++) 
+		 			// {
+		 			// 	startFrame = Math.round((singTimes[i]*44100)/4096) - 1
+		 			// 	endFrame = Math.round((singTimes[i+1]*44100)/4096) - 1
+		 			// 	if(startFrame < 0) 
+		 			// 	{
+		 			// 		startFrame = 0
+		 			// 	}
+		 			// 	if(endFrame < 0) 
+		 			// 	{
+		 			// 		endFrame = startFrame + 1
+		 			// 	}
+		 			// 	//lineLength = subtitles.subtitles.subtitle_body[i]['text'].length
+		 			// 	console.log(startFrame)
+		 			// 	console.log(endFrame)
+		 			// 	chordLine = subtitles.subtitles.subtitle_body[i]['text']
+		 			// 	chordLine[0] = chords[startFrame]
+		 			// 	chordLine[chordLine.length - 1] = chords[endFrame]
+		 			// 	chordLyric = new Array()
+		 			// 	chordLyric.push(chords[startFrame])
+		 				
+		 			// 	for (var j = 1; j < chordLine.length-1; j++) 
+		 			// 	{
+		 			// 		//chordLine[i] = ''j
+		 			// 		chordOccurences = new Array()
+		 			// 		// console.log(typeof(chords))
+		 			// 		// console.log(Math.round((j-1)*(endFrame-startFrame)/chordLine.length))
+		 			// 		// console.log(Math.round((j)*(endFrame-startFrame)/chordLine.length))
+		 			// 		temp = chords.splice(Math.round((j-1)*(endFrame-startFrame)/chordLine.length) , Math.round((j)*(endFrame-startFrame)/chordLine.length)) 
+		 			// 		// temp = temp.toString()
+		 					
+		 			// 		// console.log(temp)
+		 			// 		for (var k = 0; k < chordDict.length; k++) {
+		 			// 			// console.log(temp.split('/'+chordDict[k]+'/'+'g'))
+		 			// 			chordOccurences.push(countOccurences(temp,chordDict[k]))
+		 			// 		}
+		 			// 		// console.log(chordOccurences)
+		 			// 		maxIdx = chordOccurences.indexOf(Math.max.apply(Math, chordOccurences))
+		 			// 		chordLyric.push(chordDict[maxIdx])
+		 			// 		console.log(chordDict[maxIdx])
+		 			// 		// for (var k = Math.round((j-1)*(endFrame-startFrame)/chordLine.length); k < Math.round((j-1)*(endFrame-startFrame)/chordLine.length); k++) 
+		 			// 		// {
+		 							
+		 			// 		// }
+
+		 			// 	}
+		 			// 	console.log(chordLine)
+		 			// 	console.log(chordLyric)
+		 			// 	chordLines.push(chordLyric)
+
+		 			// };
+		 			console.log(chords)
+		 			myVar = setInterval(function(){myTimer(subtitles,chords)}, 200);
+		 		})
 		 		// document.getElementById("aplayer").src = audioSrc
 		 		// document.getElementById("audioDiv").style.visibility = 'display:inline'
 		 		console.log(audioSrc)
@@ -543,6 +706,7 @@ function getChordsAndLyrics ()
 
 $("#mxmTrackSearch").keyup(function(event) {
     if (event.keyCode == 13) {
+    	myStopFunction();
         getChordsAndLyrics();
     }
 });
